@@ -10,12 +10,24 @@ from langchain.chains import ConversationalRetrievalChain
 from htmlTemplates import css, bot_template, user_template
 from langchain.llms import HuggingFaceHub
 
-def get_pdf_text(pdf_docs):
+#downalod gravatar and store in IMG var
+IMG = "https://i.pravatar.cc/300"
+
+def get_docs_text(pdf_docs):
     text = ""
-    for pdf in pdf_docs:
-        pdf_reader = PdfReader(pdf)
-        for page in pdf_reader.pages:
-            text += page.extract_text()
+    #check if txt or pdf
+    for doc in pdf_docs:
+        doctype = doc.type
+        if doctype == "text/plain":
+            # append text from text file
+            text += doc.read().decode("utf-8")
+        elif doctype == "application/pdf":
+            pdf_reader = PdfReader(doc)
+            for page in range(pdf_reader.getNumPages()):
+                page_content = pdf_reader.getPage(page).extractText()
+                text += page_content
+        else:
+            print(f"Unsupported file type: {doctype}")
     return text
 
 
@@ -36,6 +48,8 @@ def get_vectorstore(text_chunks):
     vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
     return vectorstore
 
+def save_vectorstore(vectorstore):
+    vectorstore.save("storage\\vectorstore")
 
 def get_conversation_chain(vectorstore):
     llm = ChatOpenAI()
@@ -57,8 +71,10 @@ def handle_userinput(user_question):
 
     for i, message in enumerate(st.session_state.chat_history):
         if i % 2 == 0:
-            st.write(user_template.replace(
-                "{{MSG}}", message.content), unsafe_allow_html=True)
+            st.write(
+                user_template.replace("{{MSG}}", message.content).replace("{{IMG}}", IMG), 
+                unsafe_allow_html=True)
+
         else:
             st.write(bot_template.replace(
                 "{{MSG}}", message.content), unsafe_allow_html=True)
@@ -87,7 +103,7 @@ def main():
         if st.button("Process"):
             with st.spinner("Processing"):
                 # get pdf text
-                raw_text = get_pdf_text(pdf_docs)
+                raw_text = get_docs_text(pdf_docs)
 
                 # get the text chunks
                 text_chunks = get_text_chunks(raw_text)
